@@ -13,6 +13,18 @@ from src.dataset import ASTDataset
 from src.model import CustomAST
 from src.sam import SAM
 
+
+def str_to_bool(value):
+    if isinstance(value, bool):
+        return value
+    value = value.lower()
+    if value in {"true", "1", "yes", "y"}:
+        return True
+    if value in {"false", "0", "no", "n"}:
+        return False
+    raise argparse.ArgumentTypeError("Expected true or false")
+
+
 def train(args):
    
     DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -62,11 +74,31 @@ def train(args):
     optimizer = SAM(model.parameters(), base_optimizer, lr=args.lr, rho=0.05, weight_decay=1e-4)
     criterion = nn.CrossEntropyLoss(label_smoothing=0.1)
 
+    latest_checkpoint = args.resume_checkpoint
+    if args.resume and not os.path.exists(latest_checkpoint):
+        raise FileNotFoundError(f"Resume checkpoint not found: {latest_checkpoint}")
+
+    start_epoch = 0
+    best_score = 0.0
+    if args.resume:
+        checkpoint = torch.load(latest_checkpoint, map_location=DEVICE)
+        if "model_state_dict" in checkpoint:
+            model_state_dict = checkpoint["model_state_dict"]
+            optimizer.load_state_dict(checkpoint["optimizer_state_dict"])
+            start_epoch = checkpoint["epoch"] + 1
+            best_score = checkpoint.get("best_score", 0.0)
+        else:
+            model_state_dict = checkpoint
+            print("⚠️ Checkpoint contains weights only; optimizer state cannot be resumed.")
+
+        target_model = model.module if isinstance(model, nn.DataParallel) else model
+        target_model.load_state_dict(model_state_dict)
+        print(f"✅ Resumed from epoch {start_epoch} with best score {best_score:.4f}")
+
     # 4. EĞİTİM DÖNGÜSÜ
     print("🚀Train begins")
-    best_score = 0.0
 
-    for epoch in range(args.epochs):
+    for epoch in range(start_epoch, args.epochs):
         model.train()
         running_loss = 0.0
         
@@ -118,6 +150,16 @@ def train(args):
             torch.save(state_dict, save_path)
             print(f"    --> 💾 Last best Saved ({best_score:.4f})")
 
+        torch.save({
+            "epoch": epoch,
+            "model_state_dict": (model.module.state_dict()
+                                 if isinstance(model, nn.DataParallel)
+                                 else model.state_dict()),
+            "optimizer_state_dict": optimizer.state_dict(),
+            "best_score": best_score,
+        }, latest_checkpoint)
+        print(f"    --> 💾 Resume checkpoint saved: {latest_checkpoint}")
+
     print(f"\n🏆 Best Score: {best_score:.4f}")
 
 if __name__ == "__main__":
@@ -127,6 +169,11 @@ if __name__ == "__main__":
     parser.add_argument("--epochs", type=int, default=20, help="Number of epochs")
     parser.add_argument("--batch_size", type=int, default=8, help="Batch size")
     parser.add_argument("--lr", type=float, default=1e-5, help="Learning rate")
+    parser.add_argument("--resume", type=str_to_bool, default=False,
+                        help="Resume training from the checkpoint (true/false)")
+    parser.add_argument("--resume_checkpoint", type=str,
+                        default="./checkpoints/latest_checkpoint.pth",
+                        help="Full checkpoint used when --resume=true")
     
     args = parser.parse_args()
     train(args)

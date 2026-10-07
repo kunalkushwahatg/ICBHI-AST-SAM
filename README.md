@@ -85,6 +85,17 @@ split across the GPUs. Evaluation also uses all visible GPUs automatically:
 python train.py --epochs 20 --batch_size 16 --lr 1e-5
 python evaluate.py --model_path ./checkpoints/best_model.pth --batch_size 32
 ```
+
+Training also writes one rolling `latest_checkpoint.pth` after every epoch.
+It contains the model weights, SAM optimizer state, completed epoch, and best
+score, so interrupted training can resume without creating one file per epoch:
+
+```bash
+python train.py --epochs 20 --batch_size 16 --lr 1e-5 --resume true
+```
+
+Use `--resume false` (the default) to start a new run. The checkpoint path can
+be changed with `--resume_checkpoint`.
 3. Evaluation
 
 Evaluate the trained model on the official test set and generate the Confusion Matrix (Figure 2 in the paper).
@@ -96,6 +107,5 @@ python evaluate.py --model_path ./checkpoints/best_model.pth
 
 
 The results presented in the paper were obtained using mixed-precision (FP16) inference on an NVIDIA Tesla L4 GPU. Due to hardware differences and the non-deterministic nature of some CUDA operations, slight variations (±0.5%) in Sensitivity/Specificity metrics may be observed when retraining from scratch or running on different hardware.
-
 
 
