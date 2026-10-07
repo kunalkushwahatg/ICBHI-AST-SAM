@@ -16,7 +16,8 @@ from src.sam import SAM
 def train(args):
    
     DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    print(f"⚙️ Cihaz: {DEVICE}")
+    gpu_count = torch.cuda.device_count() if DEVICE.type == "cuda" else 0
+    print(f"⚙️ Cihaz: {DEVICE} ({gpu_count} GPU(s) available)")
     
     
     os.makedirs(args.checkpoint_dir, exist_ok=True)
@@ -51,7 +52,11 @@ def train(args):
 
     # 3. MODEL VE OPTIMIZER
     print("🧠 Preparing")
-    model = CustomAST(num_classes=4).to(DEVICE)
+    model = CustomAST(num_classes=4)
+    if gpu_count > 1:
+        print(f"🚀 Using {gpu_count} GPUs with DataParallel")
+        model = nn.DataParallel(model)
+    model = model.to(DEVICE)
     
     base_optimizer = torch.optim.AdamW
     optimizer = SAM(model.parameters(), base_optimizer, lr=args.lr, rho=0.05, weight_decay=1e-4)
@@ -107,7 +112,10 @@ def train(args):
         if score > best_score:
             best_score = score
             save_path = os.path.join(args.checkpoint_dir, "best_model.pth")
-            torch.save(model.state_dict(), save_path)
+            # Save the underlying model state so the checkpoint is portable
+            # between single-GPU and multi-GPU runs.
+            state_dict = model.module.state_dict() if isinstance(model, nn.DataParallel) else model.state_dict()
+            torch.save(state_dict, save_path)
             print(f"    --> 💾 Last best Saved ({best_score:.4f})")
 
     print(f"\n🏆 Best Score: {best_score:.4f}")

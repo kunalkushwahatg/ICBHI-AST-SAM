@@ -19,7 +19,8 @@ def evaluate(args):
     gc.collect()
     torch.cuda.empty_cache()
     DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    print(f"⚙️ Device: {DEVICE}")
+    gpu_count = torch.cuda.device_count() if DEVICE.type == "cuda" else 0
+    print(f"⚙️ Device: {DEVICE} ({gpu_count} GPU(s) available)")
 
     CLASSES = ['Normal', 'Crackle', 'Wheeze', 'Both']
 
@@ -43,7 +44,7 @@ def evaluate(args):
     if not os.path.exists(args.model_path):
         raise FileNotFoundError(f"Model dosyası bulunamadı: {args.model_path}. Önce train.py çalıştırın.")
 
-    model = CustomAST(num_classes=4).to(DEVICE)
+    model = CustomAST(num_classes=4)
     
    
     try:
@@ -55,6 +56,10 @@ def evaluate(args):
         print("Model yüklenemedi. Dosya yolunu kontrol edin.")
         return
 
+    if gpu_count > 1:
+        print(f"🚀 Using {gpu_count} GPUs with DataParallel")
+        model = nn.DataParallel(model)
+    model = model.to(DEVICE)
     model.eval()
 
     

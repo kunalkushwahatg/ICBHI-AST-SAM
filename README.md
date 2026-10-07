@@ -76,6 +76,15 @@ Train the AST model using the SAM optimizer. The script automatically saves the 
 ```bash
 python train.py --epochs 20 --batch_size 8 --lr 1e-5
 ```
+
+When multiple CUDA GPUs are available, `train.py` automatically uses all of
+them through `DataParallel`. The `--batch_size` value is the total batch size
+split across the GPUs. Evaluation also uses all visible GPUs automatically:
+
+```bash
+python train.py --epochs 20 --batch_size 16 --lr 1e-5
+python evaluate.py --model_path ./checkpoints/best_model.pth --batch_size 32
+```
 3. Evaluation
 
 Evaluate the trained model on the official test set and generate the Confusion Matrix (Figure 2 in the paper).
@@ -87,7 +96,6 @@ python evaluate.py --model_path ./checkpoints/best_model.pth
 
 
 The results presented in the paper were obtained using mixed-precision (FP16) inference on an NVIDIA Tesla L4 GPU. Due to hardware differences and the non-deterministic nature of some CUDA operations, slight variations (±0.5%) in Sensitivity/Specificity metrics may be observed when retraining from scratch or running on different hardware.
-
 
 
 
